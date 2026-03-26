@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Tesla 財報圖卡 — 美股K線</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --coral:   #D85A30;
+    --coral-l: #FAECE7;
+    --coral-d: #712B13;
+    --blue:    #185FA5;
+    --blue-l:  #E6F1FB;
+    --blue-d:  #042C53;
+    --purple:  #534AB7;
+    --purple-l:#EEEDFE;
+    --purple-d:#26215C;
+    --teal:    #0F6E56;
+    --teal-l:  #E1F5EE;
+    --teal-d:  #04342C;
+    --green:   #27500A;
+    --green-l: #EAF3DE;
+    --amber:   #BA7517;
+    --amber-l: #FAEEDA;
+    --amber-d: #412402;
+    --gray-50: #F7F6F2;
+    --gray-100:#E8E6DF;
+    --gray-300:#B4B2A9;
+    --gray-500:#5F5E5A;
+    --gray-800:#2C2C2A;
+    --text:    #1A1A18;
+    --text-2:  #5F5E5A;
+    --text-3:  #9A9890;
+    --border:  rgba(0,0,0,0.08);
+    --surface: #FFFFFF;
+    --bg:      #F4F2EC;
+    --font:    'DM Sans', sans-serif;
+    --mono:    'DM Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    font-family: var(--font);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 40px;
+  }
+
+  /* ── top bar ── */
+  .topbar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .topbar-brand {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .topbar-badge {
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--coral);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  /* ── progress dots ── */
+  .progress {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 18px;
+  }
+  .dot {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--gray-100);
+    transition: width .35s ease, background .35s ease;
+    width: 22px;
+  }
+  .dot.active { width: 34px; background: var(--coral); }
+
+  /* ── card ── */
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 0.5px solid var(--border);
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+    animation: fadeUp .3s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-stripe {
+    padding: 14px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .stripe-tag { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.7); letter-spacing: .06em; text-transform: uppercase; }
+  .stripe-ticker { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
+
+  .card-body {
+    padding: 18px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ── nav buttons ── */
+  .nav-row {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 14px;
+  }
+  .btn {
+    flex: 1;
+    height: 42px;
+    border-radius: 10px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 0.5px solid var(--gray-100);
+    background: var(--gray-50);
+    color: var(--text-2);
+    transition: background .15s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--coral); border-color: var(--coral); color: #fff; }
+  .btn.primary:hover { background: var(--coral-d); }
+  .btn.cta { background: var(--green); border-color: var(--green); color: #fff; }
+
+  /* ── metric grid ── */
+  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .metric-box { background: var(--gray-50); border-radius: 10px; padding: 11px 13px; }
+  .metric-box.warm { background: var(--amber-l); }
+  .metric-label { font-size: 10px; color: var(--text-3); margin-bottom: 4px; }
+  .metric-val { font-size: 17px; font-weight: 500; color: var(--text); line-height: 1.2; }
+  .metric-sub { font-size: 10px; margin-top: 3px; }
+  .up { color: #3B6D11; } .dn { color: #A32D2D; } .flat { color: var(--text-3); }
+
+  /* ── biz bars ── */
+  .biz-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 0.5px solid var(--border); }
+  .biz-row:last-child { border: none; }
+  .biz-name { font-size: 12px; color: var(--text); min-width: 68px; }
+  .biz-bar-bg { flex: 1; height: 5px; background: var(--gray-100); border-radius: 3px; overflow: hidden; }
+  .biz-bar { height: 100%; border-radius: 3px; transition: width .6s ease; }
+  .biz-pct { font-size: 11px; color: var(--text-3); min-width: 28px; text-align: right; }
+
+  /* ── section label ── */
+  .sec-label { font-size: 10px; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
+
+  /* ── info pill ── */
+  .info-pill { background: var(--purple-l); border-radius: 8px; padding: 10px 13px; font-size: 12px; color: var(--purple-d); line-height: 1.65; }
+  .info-pill strong { font-weight: 500; }
+
+  /* ── watch pills ── */
+  .watch-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+  .watch-pill { background: var(--amber-l); color: var(--amber-d); border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 500; }
+
+  /* ── risk note ── */
+  .risk-note { background: #FCEBEB; border-radius: 8px; padding: 10px 13px; font-size: 12px; color: #501313; line-height: 1.65; }
+
+  /* ── supply chain 3 col ── */
+  .sc-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .sc-col-head { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+  .sc-chip { background: var(--gray-50); border-radius: 7px; padding: 7px 9px; margin-bottom: 5px; }
+  .sc-chip-role { font-size: 9px; color: var(--text-3); margin-bottom: 2px; }
+  .sc-chip-co { font-size: 12px; font-weight: 500; color: var(--text); }
+  .sc-chip-code { font-family: var(--mono); font-size: 10px; color: var(--blue); }
+
+  /* ── impact rows ── */
+  .impact-row { display: flex; align-items: flex-start; gap: 10px; background: var(--gray-50); border-radius: 8px; padding: 9px 12px; }
+  .impact-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .impact-trigger { font-size: 12px; font-weight: 500; color: var(--text); }
+  .impact-stocks { font-size: 11px; color: var(--blue); margin-top: 2px; }
+
+  /* ── step rows ── */
+  .step-row { display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; border-bottom: 0.5px solid var(--border); }
+  .step-row:last-child { border: none; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #fff; flex-shrink: 0; }
+  .step-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .step-desc { font-size: 11px; color: var(--text-2); line-height: 1.55; }
+
+  /* ── cover card ── */
+  .cover-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 24px 0; gap: 8px; }
+  .cover-eyebrow { font-size: 11px; color: var(--text-3); letter-spacing: .05em; }
+  .cover-name { font-size: 40px; font-weight: 300; color: var(--text); line-height: 1.1; }
+  .cover-name span { font-weight: 600; color: var(--coral); }
+  .cover-sub { font-size: 15px; color: var(--text-2); }
+  .cover-callout { margin-top: 20px; background: var(--coral-l); border-radius: 12px; padding: 13px 16px; font-size: 12px; color: var(--coral-d); line-height: 1.7; width: 100%; }
+
+  /* ── card 4 cta box ── */
+  .cta-box { background: var(--teal-l); border-radius: 10px; padding: 12px 16px; font-size: 12px; color: var(--teal-d); line-height: 1.7; }
+  .cta-box strong { font-weight: 500; display: block; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <span class="topbar-brand">美股K線</span>
+    <span class="topbar-badge">財報季特輯</span>
+  </div>
+
+  <div class="progress" id="prog"></div>
+  <div id="card-wrap"></div>
+
+</div>
+
+<script>
+const D = {
+  ticker: "TSLA",
+  name_zh: "特斯拉",
+  report_date: "2025-04-22",
+  industry: "電動車 × 能源儲存",
+  snapshot: {
+    market_cap: "~8,000 億美元",
+    index: "S&P 500 成分股",
+    bizlines: [
+      { name: "整車銷售", pct: 85, color: "#378ADD" },
+      { name: "能源儲存", pct: 10, color: "#1D9E75" },
+      { name: "FSD 軟體", pct:  5, color: "#BA7517" }
+    ],
+    tw_note: "財報走向直接牽動台股車用電子、SiC、CCL、充電等族群漲跌"
+  },
+  earnings: {
+    prev: "Q4 2024",
+    curr: "Q1 2025",
+    prev_metrics: [
+      { label: "營收",   val: "$257 億", sub: "YoY +2%",    trend: "up"   },
+      { label: "交付量", val: "49.5 萬台", sub: "YoY -1%",   trend: "dn"   },
+      { label: "毛利率", val: "16.3%",   sub: "QoQ -0.7%",  trend: "dn"   },
+      { label: "EPS",   val: "$0.73",   sub: "略低於預期",   trend: "flat" }
+    ],
+    curr_metrics: [
+      { label: "預期營收",   val: "$235 億",   sub: "QoQ 下修",     trend: "dn"  },
+      { label: "實際交付",   val: "33.7 萬台", sub: "近 8 季最低 ⚠", trend: "dn"  },
+      { label: "預期毛利率", val: "15.5%",    sub: "降價壓力持續",   trend: "dn"  },
+      { label: "關鍵觀察",   val: "FSD 訂閱", sub: "軟體毛利潛力",   trend: "up"  }
+    ],
+    watch: ["毛利率能否守住", "儲能業務指引", "FSD 訂閱收入"],
+    risk: "Q1 交付量 33.7 萬台，為近 8 季最低。馬斯克政治爭議 + 歐洲銷售下滑是主因，財報說明會措辭是盤後走向關鍵。"
+  },
+  supply_chain: {
+    upstream: [
+      { role: "CCL 覆銅板",   co: "南亞塑膠", code: "1303" },
+      { role: "SiC 功率元件", co: "漢磊",     code: "3707" },
+      { role: "被動元件",     co: "國巨",     code: "2327" }
+    ],
+    mid: [
+      { role: "鋁壓鑄車體",   co: "文燦",     code: "1730" },
+      { role: "車用連接器",   co: "貿聯-KY",  code: "3665" },
+      { role: "充電模組",     co: "台達電",   code: "2308" }
+    ],
+    down: [
+      { role: "車載算力模組", co: "廣達",     code: "2382" },
+      { role: "儲能系統",     co: "盛弘",     code: "6703" },
+      { role: "充電樁",       co: "飛宏",     code: "2457" }
+    ]
+  },
+  impact: [
+    { trigger: "交付量超預期", stocks: "文燦、貿聯、和大",  color: "#185FA5" },
+    { trigger: "儲能指引上調", stocks: "台達電、盛弘",      color: "#0F6E56" },
+    { trigger: "FSD 訂閱增長", stocks: "廣達、聯發科 2454", color: "#534AB7" }
+  ]
+};
+
+let cur = 0;
+const TOTAL = 5;
+
+function dots() {
+  document.getElementById('prog').innerHTML =
+    Array.from({length: TOTAL}, (_, i) =>
+      `<div class="dot${i === cur ? ' active' : ''}"></div>`
+    ).join('');
+}
+
+function nav(dir) {
+  cur = Math.max(0, Math.min(TOTAL - 1, cur + dir));
+  dots();
+  document.getElementById('card-wrap').innerHTML = CARDS[cur]();
+}
+
+function navBtns(isFirst, isLast) {
+  return `<div class="nav-row">
+    ${!isFirst ? `<button class="btn" onclick="nav(-1)">← 上一張</button>` : ''}
+    ${!isLast
+      ? `<button class="btn primary" onclick="nav(1)">下一張 →</button>`
+      : `<button class="btn cta">開啟美股K線 →</button>`}
+  </div>`;
+}
+
+const CARDS = [
+
+// ── Card 0: Cover ──
+() => `
+  <div class="card">
+    <div class="card-stripe" style="background:var(--coral)">
+      <span class="stripe-tag">財報倒數</span>
+      <span class="stripe-ticker">${D.ticker} · ${D.report_date}</span>
+    </div>
+    <div class="cover-inner">
+      <div class="cover-eyebrow">${D.industry}</div>
+      <div class="cover-name"><span>${D.name_zh}</span><br>即將公布財報</div>
+      <div class="cover-sub">台股供應鏈，誰最有感？</div>
+      <div class="cover-callout">
+        📅 ${D.report_date} 盤後公布<br>
+        滑動以下 5 張圖卡，掌握完整資訊
+      </div>
+    </div>
+    <div class="card-body" style="flex:0;padding-top:0">${navBtns(true, false)}</div>
+  </div>`,
+
+// ── Card 1: Company Snapshot ──
+() => `
+  <div class="card">
+    <div class="card-stripe" style="background:var(--purple)">
+      <span class="stripe-tag">Card 1 · 公司快照</span>
+      <span class="stripe-ticker">${D.name_zh}（${D.ticker}）</span>
+    </div>
+    <div class="card-body">
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-label">產業類別</div>
+          <div class="metric-val" style="font-size:14px;line-height:1.4">${D.industry}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">市值規模</div>
+          <div class="metric-val" style="font-size:14px">${D.snapshot.market_cap}</div>
+          <div class="metric-sub flat">${D.snapshot.index}</div>
+        </div>
+      </div>
+      <div class="sec-label">三大核心業務</div>
+      <div>
+        ${D.snapshot.bizlines.map(b => `
+          <div class="biz-row">
+            <span class="biz-name">${b.name}</span>
+            <div class="biz-bar-bg"><div class="biz-bar" style="width:${b.pct}%;background:${b.color}"></div></div>
+            <span class="biz-pct">${b.pct}%</span>
+          </div>`).join('')}
+      </div>
+      <div class="info-pill">
+        <strong>為什麼台股投資人要關注？</strong><br>${D.snapshot.tw_note}
+      </div>
+      ${navBtns(false, false)}
+    </div>
+  </div>`,
+
+// ── Card 2: Earnings ──
+() => `
+  <div class="card">
+    <div class="card-stripe" style="background:var(--blue)">
+      <span class="stripe-tag">Card 2 · 財報解讀</span>
+      <span class="stripe-ticker">上季結果 × 本季預期</span>
+    </div>
+    <div class="card-body">
+      <div class="sec-label">${D.earnings.prev} 實績</div>
+      <div class="metric-grid">
+        ${D.earnings.prev_metrics.map(m => `
+          <div class="metric-box">
+            <div class="metric-label">${m.label}</div>
+            <div class="metric-val">${m.val}</div>
+            <div class="metric-sub ${m.trend}">${m.sub}</div>
+          </div>`).join('')}
+      </div>
+      <div class="sec-label">${D.earnings.curr} 市場預期</div>
+      <div class="metric-grid">
+        ${D.earnings.curr_metrics.map(m => `
+          <div class="metric-box warm">
+            <div class="metric-label">${m.label}</div>
+            <div class="metric-val" style="font-size:15px">${m.val}</div>
+            <div class="metric-sub ${m.trend}">${m.sub}</div>
+          </div>`).join('')}
+      </div>
+      <div class="sec-label">本季三大觀察點</div>
+      <div class="watch-wrap">
+        ${D.earnings.watch.map(w => `<span class="watch-pill">${w}</span>`).join('')}
+      </div>
+      <div class="risk-note">⚠ ${D.earnings.risk}</div>
+      ${navBtns(false, false)}
+    </div>
+  </div>`,
+
+// ── Card 3: Supply Chain ──
+() => `
+  <div class="card">
+    <div class="card-stripe" style="background:var(--teal)">
+      <span class="stripe-tag">Card 3 · 台股供應鏈</span>
+      <span class="stripe-ticker">受惠族群圖解</span>
+    </div>
+    <div class="card-body">
+      <div class="sc-3col">
+        <div>
+          <div class="sc-col-head" style="color:var(--blue)">上游</div>
+          ${D.supply_chain.upstream.map(x => `
+            <div class="sc-chip">
+              <div class="sc-chip-role">${x.role}</div>
+              <div class="sc-chip-co">${x.co}</div>
+              <div class="sc-chip-code">${x.code}</div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div class="sc-col-head" style="color:var(--purple)">中游</div>
+          ${D.supply_chain.mid.map(x => `
+            <div class="sc-chip">
+              <div class="sc-chip-role">${x.role}</div>
+              <div class="sc-chip-co">${x.co}</div>
+              <div class="sc-chip-code">${x.code}</div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div class="sc-col-head" style="color:var(--teal)">下游</div>
+          ${D.supply_chain.down.map(x => `
+            <div class="sc-chip">
+              <div class="sc-chip-role">${x.role}</div>
+              <div class="sc-chip-co">${x.co}</div>
+              <div class="sc-chip-code">${x.code}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="sec-label">財報結果 × 台股族群連動</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${D.impact.map(x => `
+          <div class="impact-row">
+            <div class="impact-dot" style="background:${x.color}"></div>
+            <div>
+              <div class="impact-trigger">${x.trigger}</div>
+              <div class="impact-stocks">${x.stocks}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+      ${navBtns(false, false)}
+    </div>
+  </div>`,
+
+// ── Card 4: App CTA ──
+() => `
+  <div class="card">
+    <div class="card-stripe" style="background:var(--green)">
+      <span class="stripe-tag">Card 4 · 立即追蹤</span>
+      <span class="stripe-ticker">美股K線 × 財報季</span>
+    </div>
+    <div class="card-body">
+      <div style="font-size:16px;font-weight:500;color:var(--text)">3 步驟，財報行情不漏接</div>
+      <div>
+        <div class="step-row">
+          <div class="step-num" style="background:var(--blue)">1</div>
+          <div>
+            <div class="step-title">加入自選股</div>
+            <div class="step-desc">搜尋 TSLA，一鍵加入觀察清單，盤中走勢即時掌握</div>
+          </div>
+        </div>
+        <div class="step-row">
+          <div class="step-num" style="background:var(--purple)">2</div>
+          <div>
+            <div class="step-title">開啟財報提醒</div>
+            <div class="step-desc">財報日前自動推播通知，盤後第一時間解讀</div>
+          </div>
+        </div>
+        <div class="step-row">
+          <div class="step-num" style="background:var(--teal)">3</div>
+          <div>
+            <div class="step-title">追蹤達人分析</div>
+            <div class="step-desc">財報後看台美股雙邊影響解讀，台股族群一覽</div>
+          </div>
+        </div>
+      </div>
+      <div class="cta-box">
+        <strong>美股K線</strong>
+        台灣唯一深度整合台美股連動分析的投資工具。<br>
+        下載 APP，財報季行情全掌握。
+      </div>
+      ${navBtns(false, true)}
+    </div>
+  </div>`
+
+];
+
+dots();
+document.getElementById('card-wrap').innerHTML = CARDS[0]();
+</script>
+</body>
+</html>
